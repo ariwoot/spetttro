@@ -1,190 +1,102 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
-<meta charset="utf-8" />
-<title>Spettrogramma (client-side)</title>
-<style>
-  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; padding:20px; background:#f6f7fb; }
-  #controls { display:flex; gap:12px; align-items:center; }
-  canvas { display:block; margin-top:16px; border:1px solid #ddd; background:#000; }
-  #info { margin-top:8px; color:#444; font-size:0.9rem; }
-</style>
+  <meta charset="UTF-8">
+  <title>Audio → Spettrogramma Colorato</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      background: #f8f8f8;
+    }
+    #spectrogram {
+      border: 1px solid #ccc;
+      display: block;
+      margin-top: 20px;
+    }
+  </style>
 </head>
 <body>
-  <h2>Converti audio → spettrogramma (client-side)</h2>
-  <div id="controls">
-    <input id="upload" type="file" accept="audio/*">
-    <button id="startBtn">Genera spettrogramma</button>
-    <span id="status"></span>
-  </div>
-  <div id="info">Scegli un file audio (mp3/wav/ogg). File grandi possono impiegare alcuni secondi.</div>
+  <h1>Converti audio in spettrogramma (heatmap)</h1>
+  <input type="file" id="upload" accept="audio/*">
   <canvas id="spectrogram" width="1000" height="400"></canvas>
 
-<script>
-/* ---------- utility FFT (radix-2 iterative) ---------- */
-function fftInPlace(re, im) {
-  const n = re.length;
-  if ((n & (n - 1)) !== 0) throw new Error("FFT length must be power of two");
-  // bit-reverse
-  let j = 0;
-  for (let i = 1; i < n; i++) {
-    let bit = n >> 1;
-    while (j & bit) { j ^= bit; bit >>= 1; }
-    j ^= bit;
-    if (i < j) {
-      const tr = re[i]; re[i] = re[j]; re[j] = tr;
-      const ti = im[i]; im[i] = im[j]; im[j] = ti;
-    }
-  }
-  // Cooley-Tukey
-  for (let len = 2; len <= n; len <<= 1) {
-    const ang = -2 * Math.PI / len;
-    const wlen_r = Math.cos(ang);
-    const wlen_i = Math.sin(ang);
-    for (let i = 0; i < n; i += len) {
-      let wr = 1, wi = 0;
-      for (let k = 0; k < (len >> 1); k++) {
-        const i1 = i + k;
-        const i2 = i + k + (len >> 1);
-        const re2 = re[i2], im2 = im[i2];
-        // v = w * a2
-        const vr = re2 * wr - im2 * wi;
-        const vi = re2 * wi + im2 * wr;
-        const ur = re[i1], ui = im[i1];
-        re[i1] = ur + vr;
-        im[i1] = ui + vi;
-        re[i2] = ur - vr;
-        im[i2] = ui - vi;
-        // w *= wlen
-        const twr = wr * wlen_r - wi * wlen_i;
-        const twi = wr * wlen_i + wi * wlen_r;
-        wr = twr; wi = twi;
-      }
-    }
-  }
-}
+  <!-- Libreria FFT -->
+  <script src="https://cdn.jsdelivr.net/npm/fft@0.2.1/lib/node.min.js"></script>
 
-/* ---------- color map: norm in [0..1] -> hsl color ---------- */
-function colorMap(norm) {
-  // hue: 240 (blue) -> 0 (red)
-  const hue = (1 - norm) * 240;
-  const light = 20 + norm * 60; // da scuro a chiaro
-  return `hsl(${hue},100% ${light}%)`;
-}
-
-/* ---------- Hann window ---------- */
-function makeHann(N) {
-  const w = new Float32Array(N);
-  for (let n = 0; n < N; n++) {
-    w[n] = 0.5 * (1 - Math.cos(2 * Math.PI * n / (N - 1)));
-  }
-  return w;
-}
-
-/* ---------- mix to mono (average channels) ---------- */
-function toMono(audioBuffer) {
-  const ch = audioBuffer.numberOfChannels;
-  const len = audioBuffer.length;
-  const out = new Float32Array(len);
-  if (ch === 1) return audioBuffer.getChannelData(0).slice();
-  for (let c = 0; c < ch; c++) {
-    const data = audioBuffer.getChannelData(c);
-    for (let i = 0; i < len; i++) out[i] += data[i] / ch;
-  }
-  return out;
-}
-
-/* ---------- main processing ---------- */
-document.getElementById('startBtn').addEventListener('click', () => {
-  const input = document.getElementById('upload');
-  if (!input.files[0]) { alert('Seleziona prima un file audio.'); return; }
-  processFile(input.files[0]);
-});
-
-async function processFile(file) {
-  const status = document.getElementById('status');
-  status.textContent = 'Caricamento...';
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    const ac = new (window.AudioContext || window.webkitAudioContext)();
-    const audioBuffer = await ac.decodeAudioData(arrayBuffer);
-    const sampleRate = audioBuffer.sampleRate;
-
-    status.textContent = `Decodificato: ${audioBuffer.numberOfChannels} canali @ ${sampleRate} Hz`;
-    // STFT params
-    const fftSize = 1024; // power of two
-    const hopSize = fftSize >> 1; // 50% overlap
-    const window = makeHann(fftSize);
-
-    // mono data
-    const mono = toMono(audioBuffer);
-
-    // columns to draw (limitiamo al width del canvas)
-    const canvas = document.getElementById('spectrogram');
-    const ctx = canvas.getContext('2d');
-    const width = canvas.width;
-    const height = canvas.height;
-
-    const maxColsPossible = Math.floor((mono.length - fftSize) / hopSize) + 1;
-    const cols = Math.min(width, Math.max(0, maxColsPossible));
-
-    if (cols <= 0) { alert('File molto corto o parametri FFT troppo grandi.'); status.textContent = ''; return; }
-
-    status.textContent = `Calcolo STFT (${cols} colonne)...`;
-
-    const binCount = fftSize >> 1;
-    const magCols = new Array(cols); // ogni elemento è Float32Array(binCount)
-    let globalMax = 0;
-
-    // PASS 1: calcola magnitudini e trova globalMax
-    for (let col = 0; col < cols; col++) {
-      const start = col * hopSize;
-      const re = new Float32Array(fftSize);
-      const im = new Float32Array(fftSize);
-      // apply window + fill re
-      for (let n = 0; n < fftSize; n++) {
-        const v = (start + n < mono.length) ? mono[start + n] : 0;
-        re[n] = v * window[n];
-        im[n] = 0;
-      }
-      fftInPlace(re, im);
-      const mags = new Float32Array(binCount);
-      for (let k = 0; k < binCount; k++) {
-        const m = Math.sqrt(re[k] * re[k] + im[k] * im[k]);
-        mags[k] = m;
-        if (m > globalMax) globalMax = m;
-      }
-      magCols[col] = mags;
+  <script>
+    // Funzione per mappare intensità → colore
+    function getColor(value) {
+      // value in [0..255]
+      const r = Math.max(0, 255 * (value - 128) / 128); // rosso per valori alti
+      const g = Math.max(0, 255 * (1 - Math.abs(value - 128) / 128)); // verde al centro
+      const b = Math.max(0, 255 * (128 - value) / 128); // blu per valori bassi
+      return `rgb(${Math.floor(r)}, ${Math.floor(g)}, ${Math.floor(b)})`;
     }
 
-    // PASS 2: disegna la heatmap normalizzata
-    ctx.clearRect(0,0,width,height);
-    // fondo nero
-    ctx.fillStyle = '#000'; ctx.fillRect(0,0,width,height);
+    document.getElementById('upload').addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      console.log(file);
+      if (!file) return;
 
-    const minDb = -80; // sotto questa soglia è considerato silenzio
-    const eps = 1e-12;
-    for (let col = 0; col < cols; col++) {
-      const mags = magCols[col];
-      for (let y = 0; y < height; y++) {
-        // map y -> bin (low frequencies at bottom)
-        const bin = Math.floor((1 - y / height) * (binCount - 1));
-        const mag = mags[bin];
-        const db = 20 * Math.log10((mag / (globalMax + eps)) + eps); // 0 dB = globalMax
-        let norm = (db - minDb) / (-minDb); // maps minDb..0 -> 0..1
-        if (norm < 0) norm = 0; if (norm > 1) norm = 1;
-        ctx.fillStyle = colorMap(norm);
-        ctx.fillRect(col, y, 1, 1);
+      // Decodifica audio
+      const arrayBuffer = await file.arrayBuffer();
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+      // Prendi un solo canale (mono)
+      const channelData = audioBuffer.getChannelData(0);
+
+      // Parametri STFT
+      const fftSize = 1024;
+      const hopSize = fftSize / 2;
+      const fft = new FFT(fftSize);
+      console.log(fft, 'fft');
+
+      // Canvas
+      const canvas = document.getElementById("spectrogram");
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      let x = 0;
+      for (let i = 0; i + fftSize < channelData.length; i += hopSize) {
+        const segment = channelData.slice(i, i + fftSize);
+
+        // Finestra Hann
+        for (let j = 0; j < segment.length; j++) {
+          segment[j] *= 0.5 * (1 - Math.cos(2 * Math.PI * j / (fftSize - 1)));
+        }
+
+        // FFT
+        const spectrum = fft.createComplexArray();
+        fft.realTransform(spectrum, segment);
+        fft.completeSpectrum(spectrum);
+
+        // Magnitudini
+        const magnitudes = [];
+        for (let k = 0; k < fftSize / 2; k++) {
+          const re = spectrum[2 * k];
+          const im = spectrum[2 * k + 1];
+          magnitudes.push(Math.sqrt(re * re + im * im));
+        }
+
+        // Normalizza in dB
+        const maxMag = Math.max(...magnitudes);
+        const magnitudesDb = magnitudes.map(v => 20 * Math.log10(v / maxMag + 1e-12));
+
+        // Disegna colonna
+        magnitudesDb.forEach((db, freqIndex) => {
+          // db è negativo → porto a [0..255]
+          const intensity = Math.max(0, Math.min(255, 255 + db * 5));
+          ctx.fillStyle = getColor(intensity);
+          ctx.fillRect(x, canvas.height - freqIndex, 1, 1);
+        });
+
+        x++;
+        if (x >= canvas.width) break;
       }
-    }
-
-    status.textContent = `Fine — ${cols} colonne disegnate. (FFT size=${fftSize}, hop=${hopSize})`;
-  } catch (err) {
-    console.error(err);
-    alert('Errore durante l\'elaborazione: ' + err.message);
-    document.getElementById('status').textContent = '';
-  }
-}
-</script>
+    });
+  </script>
 </body>
 </html>
