@@ -106,7 +106,8 @@ async function processFile(file) {
   status.textContent = 'Caricamento...';
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const ac = new (window.AudioContext || window.webkitAudioContext)();
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  const ac = new AudioCtx();
     const audioBuffer = await ac.decodeAudioData(arrayBuffer);
     const sampleRate = audioBuffer.sampleRate;
 
