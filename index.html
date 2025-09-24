@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Audio → Spettrogramma Colorato</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      background: #f8f8f8;
+    }
+    #spectrogram {
+      border: 1px solid #ccc;
+      display: block;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Converti audio in spettrogramma (heatmap)</h1>
+  <input type="file" id="upload" accept="audio/*">
+  <canvas id="spectrogram" width="1000" height="400"></canvas>
+
+  <!-- Libreria FFT -->
+  <script src="https://cdn.jsdelivr.net/npm/fft.js/dist/fft.min.js"></script>
+
+  <script>
+    // Funzione per mappare intensità → colore
+    function getColor(value) {
+      // value in [0..255]
+      const r = Math.max(0, 255 * (value - 128) / 128); // rosso per valori alti
+      const g = Math.max(0, 255 * (1 - Math.abs(value - 128) / 128)); // verde al centro
+      const b = Math.max(0, 255 * (128 - value) / 128); // blu per valori bassi
+      return `rgb(${Math.floor(r)}, ${Math.floor(g)}, ${Math.floor(b)})`;
+    }
+
+    document.getElementById('upload').addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // Decodifica audio
+      const arrayBuffer = await file.arrayBuffer();
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+      // Prendi un solo canale (mono)
+      const channelData = audioBuffer.getChannelData(0);
+
+      // Parametri STFT
+      const fftSize = 1024;
+      const hopSize = fftSize / 2;
+      const fft = new FFT(fftSize);
+
+      // Canvas
+      const canvas = document.getElementById("spectrogram");
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      let x = 0;
+      for (let i = 0; i + fftSize < channelData.length; i += hopSize) {
+        const segment = channelData.slice(i, i + fftSize);
+
+        // Finestra Hann
+        for (let j = 0; j < segment.length; j++) {
+          segment[j] *= 0.5 * (1 - Math.cos(2 * Math.PI * j / (fftSize - 1)));
+        }
+
+        // FFT
+        const spectrum = fft.createComplexArray();
+        fft.realTransform(spectrum, segment);
+        fft.completeSpectrum(spectrum);
+
+        // Magnitudini
+        const magnitudes = [];
+        for (let k = 0; k < fftSize / 2; k++) {
+          const re = spectrum[2 * k];
+          const im = spectrum[2 * k + 1];
+          magnitudes.push(Math.sqrt(re * re + im * im));
+        }
+
+        // Normalizza in dB
+        const maxMag = Math.max(...magnitudes);
+        const magnitudesDb = magnitudes.map(v => 20 * Math.log10(v / maxMag + 1e-12));
+
+        // Disegna colonna
+        magnitudesDb.forEach((db, freqIndex) => {
+          // db è negativo → porto a [0..255]
+          const intensity = Math.max(0, Math.min(255, 255 + db * 5));
+          ctx.fillStyle = getColor(intensity);
+          ctx.fillRect(x, canvas.height - freqIndex, 1, 1);
+        });
+
+        x++;
+        if (x >= canvas.width) break;
+      }
+    });
+  </script>
+</body>
+</html>
