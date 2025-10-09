@@ -63,9 +63,12 @@
 
   <script>
 const map = L.map('map').setView([50, 10], 4);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap'
-}).addTo(map);
+L.tileLayer.colorFilter('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    filter: ['grayscale:100%'],
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  
 
 // Dati con categorie e sottocategorie
 const places = [
@@ -131,7 +134,7 @@ updateMarkers();
               color: '#333',
               weight: 1,
               fillColor: getColor(feature.properties.ADMIN || feature.properties.name),
-              fillOpacity: 0.6
+              fillOpacity: 1
             };
           },
           onEachFeature: function(feature, layer) {
