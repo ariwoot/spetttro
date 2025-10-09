@@ -67,9 +67,16 @@ const map = L.map('map').setView([50, 10], 4);
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);*/
 
-  L.tileLayer('https://stamen-tiles.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}.png', {
+  /*L.tileLayer('https://stamen-tiles.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(map);
+  }).addTo(map);*/
+
+        const key = '507xTycnLQdsugtBFBIG';
+      const map = L.map('map').setView([50, 10], 4);
+      const mtLayer = L.maptiler.maptilerLayer({
+        apiKey: key,
+        style: L.maptiler."openstreetmap", //optional
+      }).addTo(map);
 
 // Dati con categorie e sottocategorie
 const places = [
