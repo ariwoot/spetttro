@@ -50,39 +50,21 @@
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
   <script>
-    // In alcuni ambienti le icone di default non vengono trovate: forza i percorsi CDN.
-    L.Icon.Default.mergeOptions({
-      iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-      iconUrl:       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-      shadowUrl:     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
-    });
+const map = L.map('map').setView([50, 10], 4);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap'
+}).addTo(map);
 
-    // Inizializza mappa
-    const map = L.map('map').setView([50, 10], 4);
-
-    // Tile layer (OpenStreetMap)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-
-    
-
-    const places = [
+// Dati con categorie e sottocategorie
+const places = [
   { name: "Colosseo", coords: [41.8902, 12.4922], category: "Patrimonio", subcategory: "Siti UNESCO", info: "Anfiteatro Flavio a Roma." },
   { name: "Museo del Louvre", coords: [48.8606, 2.3376], category: "Arte", subcategory: "Musei", info: "Famoso museo di Parigi." },
   { name: "Pompei", coords: [40.7484, 14.4860], category: "Patrimonio", subcategory: "Siti Archeologici", info: "Città romana sepolta dal Vesuvio." },
   { name: "Festival di Edimburgo", coords: [55.9533, -3.1883], category: "Cultura", subcategory: "Eventi", info: "Festival artistico annuale." }
 ];
 
-
-    // Crea marker cluster group
-    const markersCluster = L.markerClusterGroup({
-      showCoverageOnHover: false,
-      spiderfyOnMaxZoom: true,
-      chunkedLoading: true
-    });
-    
 // Crea il cluster
+const markersCluster = L.markerClusterGroup();
 map.addLayer(markersCluster);
 
 // Creo marker e li salvo
@@ -117,27 +99,6 @@ document.getElementById('subcategory-filter').addEventListener('change', updateM
 
 // Mostra tutti i marker al caricamento
 updateMarkers();
-      
-
-      // crea elemento lista
-      const item = document.createElement('div');
-      item.className = 'place-item';
-      item.innerHTML = `<strong>${p.name}</strong><div class="small">${p.coords[0].toFixed(4)}, ${p.coords[1].toFixed(4)}</div>`;
-      item.onclick = function() {
-        // Centro la mappa e apro popup del marker corrispondente.
-        map.setView(p.coords, 8, { animate: true });
-        // Se il marker è in un cluster "compresso", marker.openPopup() lo aprirà comunque.
-        markerById[p.id].openPopup();
-      };
-      listContainer.appendChild(item);
-    });
-
-    // Centra la mappa sui marker (utile)
-    if (markersCluster.getLayers().length) {
-      map.fitBounds(markersCluster.getBounds(), { padding: [40, 40] });
-    }
-
-    // DEBUG: se non vedi i pin controlla la console del browser (F12 → Console)
   </script>
 </body>
 </html>
