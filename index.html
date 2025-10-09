@@ -35,14 +35,26 @@
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div id="map"></div>
-    <aside id="sidebar">
-      <h2>Luoghi (demo)</h2>
-      <div class="controls small">Clicca un luogo per centrare la mappa e aprire il popup.</div>
-      <div id="places-list"></div>
-    </aside>
+<div style="display:flex; height:100vh;">
+  <div id="map" style="flex:3;"></div>
+  <div id="sidebar" style="flex:1; padding:10px; overflow-y:auto;">
+    <h3>Filtra per categoria</h3>
+    <select id="category-filter">
+      <option value="all">Tutte</option>
+      <option value="Arte">Arte</option>
+      <option value="Patrimonio">Patrimonio</option>
+      <option value="Cultura">Cultura</option>
+    </select>
+    <br><br>
+    <select id="subcategory-filter">
+      <option value="all">Tutte le sottocategorie</option>
+      <option value="Musei">Musei</option>
+      <option value="Siti UNESCO">Siti UNESCO</option>
+      <option value="Siti Archeologici">Siti Archeologici</option>
+      <option value="Eventi">Eventi</option>
+    </select>
   </div>
+</div>
 
   <!-- Leaflet JS (deve venire prima di MarkerCluster) -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
