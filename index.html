@@ -65,24 +65,15 @@
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // --- Dati demo: 50 punti casuali in un bounding box Europa ---
-    function randLatLngInEurope() {
-      // latitudine 36..71, longitudine -10..40
-      const lat = 36 + Math.random() * (71 - 36);
-      const lng = -10 + Math.random() * (40 - (-10));
-      return [lat, lng];
-    }
+    
 
-    const places = [];
-    for (let i = 1; i <= 50; i++) {
-      const coords = randLatLngInEurope();
-      places.push({
-        id: i,
-        name: `Luogo ${i}`,
-        coords: coords,
-        info: `Informazioni demo per il luogo ${i}`
-      });
-    }
+    const places = [
+  { name: "Colosseo", coords: [41.8902, 12.4922], category: "Patrimonio", subcategory: "Siti UNESCO", info: "Anfiteatro Flavio a Roma." },
+  { name: "Museo del Louvre", coords: [48.8606, 2.3376], category: "Arte", subcategory: "Musei", info: "Famoso museo di Parigi." },
+  { name: "Pompei", coords: [40.7484, 14.4860], category: "Patrimonio", subcategory: "Siti Archeologici", info: "Città romana sepolta dal Vesuvio." },
+  { name: "Festival di Edimburgo", coords: [55.9533, -3.1883], category: "Cultura", subcategory: "Eventi", info: "Festival artistico annuale." }
+];
+
 
     // Crea marker cluster group
     const markersCluster = L.markerClusterGroup({
@@ -90,18 +81,43 @@
       spiderfyOnMaxZoom: true,
       chunkedLoading: true
     });
+    
+// Crea il cluster
+map.addLayer(markersCluster);
 
-    // Mappa id->marker per aprire popup dalla lista
-    const markerById = {};
+// Creo marker e li salvo
+const allMarkers = places.map(place => {
+  const marker = L.marker(place.coords)
+    .bindPopup(`<b>${place.name}</b><br>${place.info}`);
+  marker.category = place.category;
+  marker.subcategory = place.subcategory;
+  return marker;
+});
 
-    // Aggiungi marker e lista
-    const listContainer = document.getElementById('places-list');
+// Funzione per aggiornare mappa in base ai filtri
+function updateMarkers() {
+  const selectedCat = document.getElementById('category-filter').value;
+  const selectedSubcat = document.getElementById('subcategory-filter').value;
 
-    places.forEach(p => {
-      const m = L.marker(p.coords);
-      m.bindPopup(`<strong>${p.name}</strong><br>${p.info}`);
-      markersCluster.addLayer(m);
-      markerById[p.id] = m;
+  markersCluster.clearLayers();
+
+  const filtered = allMarkers.filter(m => {
+    const matchCat = selectedCat === 'all' || m.category === selectedCat;
+    const matchSubcat = selectedSubcat === 'all' || m.subcategory === selectedSubcat;
+    return matchCat && matchSubcat;
+  });
+
+  markersCluster.addLayers(filtered);
+  if (filtered.length) map.fitBounds(L.featureGroup(filtered).getBounds());
+}
+
+// Event listener sui select
+document.getElementById('category-filter').addEventListener('change', updateMarkers);
+document.getElementById('subcategory-filter').addEventListener('change', updateMarkers);
+
+// Mostra tutti i marker al caricamento
+updateMarkers();
+      
 
       // crea elemento lista
       const item = document.createElement('div');
@@ -115,9 +131,6 @@
       };
       listContainer.appendChild(item);
     });
-
-    // Aggiungo il cluster alla mappa
-    map.addLayer(markersCluster);
 
     // Centra la mappa sui marker (utile)
     if (markersCluster.getLayers().length) {
